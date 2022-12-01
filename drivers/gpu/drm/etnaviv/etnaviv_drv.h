@@ -11,6 +11,7 @@
 #include <linux/sizes.h>
 #include <linux/time64.h>
 #include <linux/types.h>
+#include <linux/xarray.h>
 
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_gem.h>
