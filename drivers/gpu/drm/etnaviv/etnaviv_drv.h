@@ -28,6 +28,7 @@ struct etnaviv_iommu_global;
 #define ETNAVIV_SOFTPIN_START_ADDRESS	SZ_4M /* must be >= SUBALLOC_SIZE */
 
 struct etnaviv_file_private {
+	int id;
 	struct etnaviv_iommu_context	*mmu;
 	struct drm_sched_entity		sched_entity[ETNA_MAX_PIPES];
 };
@@ -39,6 +40,9 @@ struct etnaviv_drm_private {
 
 	struct etnaviv_cmdbuf_suballoc *cmdbuf_suballoc;
 	struct etnaviv_iommu_global *mmu_global;
+
+	struct xarray active_contexts;
+	u32 next_context_id;
 
 	/* list of GEM objects: */
 	struct mutex gem_lock;
