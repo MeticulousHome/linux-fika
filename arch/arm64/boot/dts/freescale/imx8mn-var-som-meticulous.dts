@@ -15,6 +15,12 @@
 	model = "Variscite VAR-SOM-MX8MN Meticulous FIKA board";
 	compatible = "meticulous,fika-var-mx8mn", "variscite,var-som-mx8mn-meticulous", "variscite,var-som-mx8mn", "fsl,imx8mn";
 
+	aliases {
+		rtc0 = &ds1337;
+		rtc1 = &snvs_rtc;
+	};
+
+
 	reg_usdhc2_vmmc: regulator-usdhc2-vmmc {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default";
@@ -65,10 +71,8 @@
 			};
 		};
 	};
-};
 
-&i2c3 {
-	rtc@68 {
+	ds1337: rtc@68 {
 		compatible = "dallas,ds1337";
 		reg = <0x68>;
 	};
