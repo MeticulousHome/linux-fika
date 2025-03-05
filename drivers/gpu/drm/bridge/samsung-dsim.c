@@ -1496,9 +1496,6 @@ static void samsung_dsim_atomic_post_disable(struct drm_bridge *bridge,
 {
 	struct samsung_dsim *dsi = bridge_to_dsi(bridge);
 
-	if (!samsung_dsim_hw_is_exynos(dsi->plat_data->hw_type))
-		samsung_dsim_set_stop_state(dsi, true);
-
 	dsi->state &= ~DSIM_STATE_ENABLED;
 	pm_runtime_put_sync(dsi->dev);
 }
