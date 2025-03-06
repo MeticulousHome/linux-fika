@@ -12,6 +12,10 @@
 
 / {
 	model = "Variscite VAR-SOM-MX8M-NANO on Symphony-Board";
+	aliases {
+		rtc0 = &ds1337;
+		rtc1 = &snvs_rtc;
+	};
 
 	chosen {
 		stdout-path = &uart4;
@@ -312,7 +316,7 @@
 		};
 	};
 	/* DS1337 RTC module */
-	rtc@68 {
+	ds1337: rtc@68 {
 		status = "okay";
 		compatible = "dallas,ds1337";
 		reg = <0x68>;
