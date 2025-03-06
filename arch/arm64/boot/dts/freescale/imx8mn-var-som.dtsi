@@ -687,7 +687,9 @@
 
 	brcmf: bcrmf@1 {
 		reg = <1>;
-		compatible = "brcm,bcm4329-fmac";
+		compatible = "brcm,bcm4339-fmac", "brcm,bcm4329-fmac";
+
+		brcm,drive-strength = <10>;
 	};
 };
 
