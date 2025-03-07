@@ -88,6 +88,11 @@
 	};
 };
 
+&brcmf {
+	compatible = "brcm,bcm4339-fmac", "brcm,bcm4329-fmac";
+	brcm,drive-strength = <10>;
+};
+
 &ethphy {
 	status = "disabled";
 };
