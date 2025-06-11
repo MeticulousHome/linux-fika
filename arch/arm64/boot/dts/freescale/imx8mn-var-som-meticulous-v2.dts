@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Device tree overlay to support the VAR-SOM-MX8M-NANO V2
+ * Copyright 2025 Variscite Ltd.
+ * Copyright 2025 Johanna Schander <git@mimoja.de>
+ */
+
+/dts-v1/;
+
+#include "imx8mn-var-som-meticulous.dts"
+#include <dt-bindings/gpio/gpio.h>
+#include "imx8mn-pinfunc.h"
+
+/ {
+	model = "Variscite VAR-SOM-MX8MN module V2";
+	compatible = "variscite,var-som-mx8mn", "fsl,imx8mn";
+
+	iw612_pwrseq: iw612_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		post-power-on-delay-ms = <100>;
+		power-off-delay-us = <10000>;
+		reset-gpios = <&gpio2 10 GPIO_ACTIVE_LOW>,	/* WIFI_RESET */
+			          <&gpio2 20 GPIO_ACTIVE_LOW>;	/* WIFI_PWR_EN */
+		status = "okay";
+	};
+
+};
+
+/* Bluetooth */
+&uart2 {
+	status = "okay";
+	uart-has-rtscts;
+	bluetooth_iw61x: bluetooth_iw61x {
+		compatible = "nxp,88w8987-bt";
+		fw-init-baudrate = <3000000>;
+		status = "okay";
+	};
+};
+
+
+/* WIFI */
+&usdhc1 {
+	mmc-pwrseq = <&iw612_pwrseq>;
+
+	status = "okay";
+
+	// Delete the brcmf node as V2 uses the iw612 driver
+	/delete-node/ brcmf;
+};
+
+
+// FIXME: The mxl8611x is not yet supported upstream, so we dont configure it at this point.
+&ethphy {
+	reset-deassert-us = <100000>;
+};
