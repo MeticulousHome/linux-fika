@@ -175,12 +175,17 @@ imx8mn-var-som-wbe-symphony-dtbs := imx8mn-var-som-symphony.dtb  imx8mn-var-som-
 imx8mn-var-som-wbe-symphony-m7-dtbs := imx8mn-var-som-symphony-m7.dtb  imx8mn-var-som-wbe.dtbo
 imx8mn-var-som-wbe-symphony-root-dtbs := imx8mn-var-som-symphony-root.dtb  imx8mn-var-som-wbe.dtbo
 
+imx8mn-var-som-meticulous-dtbs := imx8mn-var-som-symphony.dtb  imx8mn-var-som-1.x.dtbo
+
 dtb-$(CONFIG_ARCH_MXC) += imx8mn-var-som-1.x-symphony.dtb \
 			  imx8mn-var-som-1.x-symphony-m7.dtb \
 			  imx8mn-var-som-1.x-symphony-root.dtb \
 			  imx8mn-var-som-wbe-symphony.dtb \
 			  imx8mn-var-som-wbe-symphony-m7.dtb \
-			  imx8mn-var-som-wbe-symphony-root.dtb
+			  imx8mn-var-som-wbe-symphony-root.dtb \
+			  imx8mn-var-som-meticulous.dtb \
+			  imx8mn-var-som-meticulous-v2.dtb \
+			  imx8mn-var-som-symphony-v2.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk.dtb imx8mp-evk-rm67191.dtb imx8mp-evk-it6263-lvds-dual-channel.dtb \
 			  imx8mp-evk-pcie-ep.dtb  imx8mp-evk-rpmsg.dtb imx8mp-evk-ecspi-slave.dtb \
