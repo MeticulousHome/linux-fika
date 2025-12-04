@@ -1218,10 +1218,15 @@ static int st7701_dsi_probe(struct mipi_dsi_device *dsi)
 	if (!st7701->desc->lanes)
 		return dev_err_probe(&dsi->dev, -EINVAL, "This panel is not for MIPI DSI\n");
 
-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
-			  MIPI_DSI_MODE_LPM | MIPI_DSI_CLOCK_NON_CONTINUOUS;
 	dsi->format = st7701->desc->format;
 	dsi->lanes = st7701->desc->lanes;
+
+	dsi->mode_flags = MIPI_DSI_MODE_VIDEO |
+			  MIPI_DSI_MODE_LPM | MIPI_DSI_CLOCK_NON_CONTINUOUS;
+	// The driver will not recognize the vsync porches in burst mode if the
+	// vertical resolution is less than 512 pixels as the PCLK config is invalid in these cases.
+	if (st7701->desc->mode->vdisplay >= 512)
+		dsi->mode_flags |= MIPI_DSI_MODE_VIDEO_BURST;
 
 	err = mipi_dsi_attach(dsi);
 	if (err)
