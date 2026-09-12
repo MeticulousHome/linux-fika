@@ -100,6 +100,17 @@ enum op_bias {
 	OP_BIAS_MAX
 };
 
+enum st7701_diagnostic_phase {
+	ST7701_DIAGNOSTIC_NONE = 0,
+	ST7701_DIAGNOSTIC_RESET,
+	ST7701_DIAGNOSTIC_COMMON_INIT,
+	ST7701_DIAGNOSTIC_GIP_INIT,
+	ST7701_DIAGNOSTIC_FINALIZE,
+	ST7701_DIAGNOSTIC_DISPLAY_ON,
+	ST7701_DIAGNOSTIC_DISPLAY_OFF,
+	ST7701_DIAGNOSTIC_SLEEP_IN,
+};
+
 struct st7701;
 
 struct st7701_panel_desc {
@@ -124,6 +135,7 @@ struct st7701_panel_desc {
 	const u16	t2d_ns;		/* T2D in ns */
 	const u16	t3d_ns;		/* T3D in ns */
 	const bool	eot_en;
+	const bool	diagnostic_trace;
 
 	/* GIP sequence, fully custom and undocumented. */
 	void		(*gip_sequence)(struct st7701 *st7701);
@@ -139,6 +151,8 @@ struct st7701 {
 	struct gpio_desc *reset;
 	unsigned int sleep_delay;
 	enum drm_panel_orientation orientation;
+	enum st7701_diagnostic_phase diagnostic_phase;
+	unsigned int diagnostic_ordinal;
 
 	int (*write_command)(struct st7701 *st7701, u8 cmd, const u8 *seq,
 			     size_t len);
@@ -161,11 +175,62 @@ static int st7701_dbi_write(struct st7701 *st7701, u8 cmd, const u8 *seq,
 	return mipi_dbi_command_stackbuf(&st7701->dbi, cmd, seq, len);
 }
 
-#define ST7701_WRITE(st7701, cmd, seq...)				\
-	{								\
-		const u8 d[] = { seq };					\
-		st7701->write_command(st7701, cmd, d, ARRAY_SIZE(d));	\
+static const char *st7701_diagnostic_phase_name(struct st7701 *st7701)
+{
+	switch (st7701->diagnostic_phase) {
+	case ST7701_DIAGNOSTIC_RESET:
+		return "reset";
+	case ST7701_DIAGNOSTIC_COMMON_INIT:
+		return "common-init";
+	case ST7701_DIAGNOSTIC_GIP_INIT:
+		return "gip-init";
+	case ST7701_DIAGNOSTIC_FINALIZE:
+		return "finalize";
+	case ST7701_DIAGNOSTIC_DISPLAY_ON:
+		return "display-on";
+	case ST7701_DIAGNOSTIC_DISPLAY_OFF:
+		return "display-off";
+	case ST7701_DIAGNOSTIC_SLEEP_IN:
+		return "sleep-in";
+	case ST7701_DIAGNOSTIC_NONE:
+	default:
+		return "none";
 	}
+}
+
+static void st7701_diagnostic_event(struct st7701 *st7701,
+				    const char *event)
+{
+	if (!st7701->desc->diagnostic_trace)
+		return;
+
+	dev_info(st7701->panel.dev,
+		 "diagnostic event=%s phase=%s write_ordinal=%u\n",
+		 event, st7701_diagnostic_phase_name(st7701),
+		 st7701->diagnostic_ordinal);
+}
+
+static int st7701_write_command(struct st7701 *st7701, u8 cmd,
+				const u8 *seq, size_t len)
+{
+	unsigned int ordinal = ++st7701->diagnostic_ordinal;
+	int ret;
+
+	ret = st7701->write_command(st7701, cmd, seq, len);
+	if (st7701->desc->diagnostic_trace && ret < 0)
+		dev_err(st7701->panel.dev,
+			"diagnostic write_failed phase=%s ordinal=%u cmd=0x%02x len=%zu error=%d\n",
+			st7701_diagnostic_phase_name(st7701), ordinal, cmd,
+			len, ret);
+
+	return ret;
+}
+
+#define ST7701_WRITE(st7701, cmd, seq...)				\
+	do {							\
+		const u8 d[] = { seq };					\
+		st7701_write_command(st7701, cmd, d, ARRAY_SIZE(d));	\
+	} while (0)
 
 static u8 st7701_vgls_map(struct st7701 *st7701)
 {
@@ -216,17 +281,19 @@ static void st7701_init_sequence(struct st7701 *st7701)
 	/* We need to wait 5ms before sending new commands */
 	msleep(5);
 
+	st7701_diagnostic_event(st7701, "common_sleep_out_write");
 	ST7701_WRITE(st7701, MIPI_DCS_EXIT_SLEEP_MODE, 0x00);
 
 	msleep(st7701->sleep_delay);
+	st7701_diagnostic_event(st7701, "common_sleep_out_settled");
 
 	/* Command2, BK0 */
 	st7701_switch_cmd_bkx(st7701, true, 0);
 
-	st7701->write_command(st7701, ST7701_CMD2_BK0_PVGAMCTRL, desc->pv_gamma,
-			      ARRAY_SIZE(desc->pv_gamma));
-	st7701->write_command(st7701, ST7701_CMD2_BK0_NVGAMCTRL, desc->nv_gamma,
-			      ARRAY_SIZE(desc->nv_gamma));
+	st7701_write_command(st7701, ST7701_CMD2_BK0_PVGAMCTRL,
+			     desc->pv_gamma, ARRAY_SIZE(desc->pv_gamma));
+	st7701_write_command(st7701, ST7701_CMD2_BK0_NVGAMCTRL,
+			     desc->nv_gamma, ARRAY_SIZE(desc->nv_gamma));
 	/*
 	 * Vertical line count configuration:
 	 * Line[6:0]: select number of vertical lines of the TFT matrix in
@@ -350,8 +417,10 @@ static void hw_021p0z002_01_gip_sequence(struct st7701 *st7701) {
 	/* Set Pixel Format to 24-bit */
 	ST7701_WRITE(st7701, MIPI_DCS_SET_PIXEL_FORMAT, 0x77);
 	ST7701_WRITE(st7701, MIPI_DCS_SET_ADDRESS_MODE, 0x00);
+	st7701_diagnostic_event(st7701, "gip_sleep_out_write");
 	ST7701_WRITE(st7701, MIPI_DCS_EXIT_SLEEP_MODE);
 	msleep(120);
+	st7701_diagnostic_event(st7701, "gip_sleep_out_settled");
 
 	// // Display ON
 	// ST7701_WRITE(st7701, MIPI_DCS_SET_DISPLAY_ON);
@@ -561,29 +630,78 @@ static void rg28xx_gip_sequence(struct st7701 *st7701)
 	st7701_switch_cmd_bkx(st7701, false, 0);
 }
 
+static void st7701_diagnostic_read_u8(struct st7701 *st7701, u8 cmd,
+				      const char *name)
+{
+	ssize_t ret;
+	u8 value = 0;
+
+	if (!st7701->desc->diagnostic_trace || !st7701->dsi)
+		return;
+
+	ret = mipi_dsi_dcs_read(st7701->dsi, cmd, &value, sizeof(value));
+	if (ret < 0) {
+		dev_warn(st7701->panel.dev,
+			 "diagnostic read_failed name=%s cmd=0x%02x error=%zd\n",
+			 name, cmd, ret);
+		return;
+	}
+
+	dev_info(st7701->panel.dev,
+		 "diagnostic readback name=%s cmd=0x%02x bytes=%zd value=0x%02x\n",
+		 name, cmd, ret, value);
+}
+
+static void st7701_diagnostic_readback(struct st7701 *st7701)
+{
+	st7701_diagnostic_read_u8(st7701, MIPI_DCS_GET_POWER_MODE, "power-mode");
+	st7701_diagnostic_read_u8(st7701, MIPI_DCS_GET_ADDRESS_MODE, "address-mode");
+	st7701_diagnostic_read_u8(st7701, MIPI_DCS_GET_PIXEL_FORMAT, "pixel-format");
+	st7701_diagnostic_read_u8(st7701, MIPI_DCS_GET_DISPLAY_MODE, "display-mode");
+}
+
 static int st7701_prepare(struct drm_panel *panel)
 {
 	struct st7701 *st7701 = panel_to_st7701(panel);
 	int ret;
 
+	st7701->diagnostic_ordinal = 0;
+	st7701->diagnostic_phase = ST7701_DIAGNOSTIC_RESET;
+	st7701_diagnostic_event(st7701, "prepare_begin");
 	gpiod_set_value(st7701->reset, 0);
+	st7701_diagnostic_event(st7701, "reset_value_0");
 
 	ret = regulator_bulk_enable(ARRAY_SIZE(st7701->supplies),
 				    st7701->supplies);
-	if (ret < 0)
+	if (ret < 0) {
+		if (st7701->desc->diagnostic_trace)
+			dev_err(st7701->panel.dev,
+				"diagnostic regulator_enable_failed error=%d\n",
+				ret);
 		return ret;
+	}
 	msleep(20);
 
 	gpiod_set_value(st7701->reset, 1);
+	st7701_diagnostic_event(st7701, "reset_value_1");
 	msleep(150);
 
+	st7701->diagnostic_phase = ST7701_DIAGNOSTIC_COMMON_INIT;
+	st7701_diagnostic_event(st7701, "common_init_begin");
 	st7701_init_sequence(st7701);
+	st7701_diagnostic_event(st7701, "common_init_complete");
 
-	if (st7701->desc->gip_sequence)
+	if (st7701->desc->gip_sequence) {
+		st7701->diagnostic_phase = ST7701_DIAGNOSTIC_GIP_INIT;
+		st7701_diagnostic_event(st7701, "gip_init_begin");
 		st7701->desc->gip_sequence(st7701);
+		st7701_diagnostic_event(st7701, "gip_init_complete");
+	}
 
 	/* Disable Command2 */
+	st7701->diagnostic_phase = ST7701_DIAGNOSTIC_FINALIZE;
 	st7701_switch_cmd_bkx(st7701, false, 0);
+	st7701_diagnostic_event(st7701, "prepare_complete");
 
 	return 0;
 }
@@ -592,7 +710,11 @@ static int st7701_enable(struct drm_panel *panel)
 {
 	struct st7701 *st7701 = panel_to_st7701(panel);
 
+	st7701->diagnostic_phase = ST7701_DIAGNOSTIC_DISPLAY_ON;
+	st7701_diagnostic_event(st7701, "display_on_write");
 	ST7701_WRITE(st7701, MIPI_DCS_SET_DISPLAY_ON, 0x00);
+	st7701_diagnostic_event(st7701, "display_on_complete");
+	st7701_diagnostic_readback(st7701);
 
 	return 0;
 }
@@ -601,7 +723,10 @@ static int st7701_disable(struct drm_panel *panel)
 {
 	struct st7701 *st7701 = panel_to_st7701(panel);
 
+	st7701->diagnostic_phase = ST7701_DIAGNOSTIC_DISPLAY_OFF;
+	st7701_diagnostic_event(st7701, "display_off_write");
 	ST7701_WRITE(st7701, MIPI_DCS_SET_DISPLAY_OFF, 0x00);
+	st7701_diagnostic_event(st7701, "display_off_complete");
 
 	return 0;
 }
@@ -610,11 +735,15 @@ static int st7701_unprepare(struct drm_panel *panel)
 {
 	struct st7701 *st7701 = panel_to_st7701(panel);
 
+	st7701->diagnostic_phase = ST7701_DIAGNOSTIC_SLEEP_IN;
+	st7701_diagnostic_event(st7701, "sleep_in_write");
 	ST7701_WRITE(st7701, MIPI_DCS_ENTER_SLEEP_MODE, 0x00);
 
 	msleep(st7701->sleep_delay);
+	st7701_diagnostic_event(st7701, "sleep_in_settled");
 
 	gpiod_set_value(st7701->reset, 0);
+	st7701_diagnostic_event(st7701, "reset_value_0");
 
 	/**
 	 * During the Resetting period, the display will be blanked
@@ -881,6 +1010,7 @@ static const struct st7701_panel_desc hw_021p0z002_01_desc = {
 	.t2d_ns = 1600,
 	.t3d_ns = 10400,
 	.eot_en = true,
+	.diagnostic_trace = true,
 	.gip_sequence = hw_021p0z002_01_gip_sequence,
 };
 
