@@ -9,6 +9,7 @@
 
 #include "imx8mn-var-som-meticulous.dts"
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include "imx8mn-pinfunc.h"
 
 / {
@@ -40,12 +41,34 @@
 
 /* WIFI */
 &usdhc1 {
+	pinctrl-0 = <&pinctrl_usdhc1>, <&pinctrl_wifi_host_wake>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>, <&pinctrl_wifi_host_wake>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>, <&pinctrl_wifi_host_wake>;
 	mmc-pwrseq = <&iw612_pwrseq>;
 
 	status = "okay";
 
 	// Delete the brcmf node as V2 uses the iw612 driver
 	/delete-node/ brcmf;
+
+	/*
+	 * WIFI_HOST_WAKE: the IW612 pulls it low to wake the SoC from suspend
+	 * (WoWLAN). moal looks this node up and arms it as a wake-up IRQ.
+	 */
+	wifi_wake_host {
+		compatible = "nxp,wifi-wake-host";
+		interrupt-parent = <&gpio3>;
+		interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-names = "host-wake";
+	};
+};
+
+&iomuxc {
+	pinctrl_wifi_host_wake: wifihostwakegrp {
+		fsl,pins = <
+			MX8MN_IOMUXC_NAND_DQS_GPIO3_IO14	0x1c0
+		>;
+	};
 };
 
 
