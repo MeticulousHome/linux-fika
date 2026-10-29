@@ -124,6 +124,12 @@ struct st7701_panel_desc {
 	const u16	t2d_ns;		/* T2D in ns */
 	const u16	t3d_ns;		/* T3D in ns */
 	const bool	eot_en;
+	/*
+	 * Vertical front porch the IC is told (PORCTRL) when it differs from
+	 * the mode's, i.e. the host sends more blanking lines than that. 0: the
+	 * mode's.
+	 */
+	const u8	porctrl_vfp;
 
 	/* GIP sequence, fully custom and undocumented. */
 	void		(*gip_sequence)(struct st7701 *st7701);
@@ -246,6 +252,7 @@ static void st7701_init_sequence(struct st7701 *st7701)
 		   FIELD_PREP(ST7701_CMD2_BK0_PORCTRL_VBP_MASK,
 			      mode->vtotal - mode->vsync_end),
 		   FIELD_PREP(ST7701_CMD2_BK0_PORCTRL_VFP_MASK,
+			      desc->porctrl_vfp ?:
 			      mode->vsync_start - mode->vdisplay));
 	/*
 	 * Horizontal pixel count configuration:
@@ -779,7 +786,15 @@ static const struct st7701_panel_desc ts8550b_desc = {
 
 
 static const struct drm_display_mode hw_021p0z002_01_mode = {
-	.clock		= 18000,
+	/*
+	 * 63.5 Hz: 20.89 MHz / (548 x 600). With 517 lines per frame (18 MHz)
+	 * the IC took only every other frame: the glass showed 31.8 of the 63.5
+	 * frames per second (240 fps camera, 2026-10). It takes every frame from
+	 * 528 lines up whatever the clock, so the frame has 600 lines (83 more
+	 * in the front porch) and the clock grows with them. The IC keeps its
+	 * front porch at 22 (porctrl_vfp), as tested.
+	 */
+	.clock		= 20890,
 
 	// Manufacturer timing parameters
 	// HS=8
@@ -794,9 +809,9 @@ static const struct drm_display_mode hw_021p0z002_01_mode = {
 	.htotal     = 480 + 30 + 8 + 30, // HFP + HPW + HBP
 
 	.vdisplay	= 480,
-	.vsync_start	= 480 + 22,
-	.vsync_end	= 480 + 22 + 4,
-	.vtotal		= 480 + 22 + 4 + 11, // Note the difference from the manufacturer timing
+	.vsync_start	= 480 + 22 + 83,
+	.vsync_end	= 480 + 22 + 83 + 4,
+	.vtotal		= 480 + 22 + 83 + 4 + 11, // Note the difference from the manufacturer timing
 	.width_mm	= 53,
 	.height_mm	= 53,
 
@@ -881,6 +896,7 @@ static const struct st7701_panel_desc hw_021p0z002_01_desc = {
 	.t2d_ns = 1600,
 	.t3d_ns = 10400,
 	.eot_en = true,
+	.porctrl_vfp = 22,
 	.gip_sequence = hw_021p0z002_01_gip_sequence,
 };
 
