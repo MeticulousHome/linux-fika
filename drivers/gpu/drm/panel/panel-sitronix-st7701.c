@@ -787,12 +787,11 @@ static const struct st7701_panel_desc ts8550b_desc = {
 
 static const struct drm_display_mode hw_021p0z002_01_mode = {
 	/*
-	 * 63.5 Hz: 20.89 MHz / (548 x 600). With 517 lines per frame (18 MHz)
-	 * the IC took only every other frame: the glass showed 31.8 of the 63.5
-	 * frames per second (240 fps camera, 2026-10). It takes every frame from
-	 * 528 lines up whatever the clock, so the frame has 600 lines (83 more
-	 * in the front porch) and the clock grows with them. The IC keeps its
-	 * front porch at 22 (porctrl_vfp), as tested.
+	 * The ST7701 latches only every other frame below ~528 lines per frame,
+	 * whatever the pixel clock, so the frame has 600 lines for margin and the
+	 * clock is sized for 63.5 Hz: 20.89 MHz / (548 x 600). The 83 extra lines
+	 * are host-side front porch only; the IC is still told 22 (porctrl_vfp).
+	 * Lines shorter than ~15 us (above ~36 MHz here) break the picture.
 	 */
 	.clock		= 20890,
 
