@@ -130,6 +130,14 @@ struct st7701_panel_desc {
 	 * mode's.
 	 */
 	const u8	porctrl_vfp;
+	/*
+	 * Set MIPI_DSI_MODE_VSYNC_FLUSH. On samsung-dsim that leaves MflushVS
+	 * (DSIM_CONFIG bit 29) clear, as NXP's sec-dsim does without the flag.
+	 * With the bit set, pixels left in the host's payload FIFO by a bad
+	 * start stay there: the picture is shifted along the scan line and
+	 * wraps until the next modeset.
+	 */
+	const bool	vsync_flush;
 
 	/* GIP sequence, fully custom and undocumented. */
 	void		(*gip_sequence)(struct st7701 *st7701);
@@ -896,6 +904,7 @@ static const struct st7701_panel_desc hw_021p0z002_01_desc = {
 	.t3d_ns = 10400,
 	.eot_en = true,
 	.porctrl_vfp = 22,
+	.vsync_flush = true,
 	.gip_sequence = hw_021p0z002_01_gip_sequence,
 };
 
@@ -1391,6 +1400,8 @@ static int st7701_dsi_probe(struct mipi_dsi_device *dsi)
 	// vertical resolution is less than 512 pixels as the PCLK config is invalid in these cases.
 	if (st7701->desc->mode->vdisplay >= 512)
 		dsi->mode_flags |= MIPI_DSI_MODE_VIDEO_BURST;
+	if (st7701->desc->vsync_flush)
+		dsi->mode_flags |= MIPI_DSI_MODE_VSYNC_FLUSH;
 
 	err = mipi_dsi_attach(dsi);
 	if (err)
